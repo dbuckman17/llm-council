@@ -2,7 +2,7 @@
  * API client for the LLM Council backend.
  */
 
-const API_BASE = 'http://localhost:8001';
+const API_BASE = import.meta.env.VITE_API_BASE ?? 'http://localhost:8001';
 
 export const api = {
   /**
@@ -47,9 +47,115 @@ export const api = {
   },
 
   /**
+   * Fetch available system prompt templates.
+   */
+  async getTemplates() {
+    const response = await fetch(`${API_BASE}/api/templates`);
+    if (!response.ok) {
+      throw new Error('Failed to fetch templates');
+    }
+    return response.json();
+  },
+
+  /**
+   * Fetch available models organized by provider.
+   */
+  async getModels() {
+    const response = await fetch(`${API_BASE}/api/models`);
+    if (!response.ok) {
+      throw new Error('Failed to fetch models');
+    }
+    return response.json();
+  },
+
+  /**
+   * Optimize a prompt using a selected model.
+   */
+  async optimizePrompt(prompt, model) {
+    const response = await fetch(`${API_BASE}/api/optimize-prompt`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ prompt, model }),
+    });
+    if (!response.ok) {
+      throw new Error('Failed to optimize prompt');
+    }
+    return response.json();
+  },
+
+  /**
+   * Upload files to a conversation.
+   */
+  async uploadFiles(conversationId, fileList) {
+    const formData = new FormData();
+    for (const file of fileList) {
+      formData.append('files', file);
+    }
+    const response = await fetch(
+      `${API_BASE}/api/conversations/${conversationId}/files`,
+      { method: 'POST', body: formData }
+    );
+    if (!response.ok) {
+      throw new Error('Failed to upload files');
+    }
+    return response.json();
+  },
+
+  /**
+   * List files for a conversation.
+   */
+  async listFiles(conversationId) {
+    const response = await fetch(
+      `${API_BASE}/api/conversations/${conversationId}/files`
+    );
+    if (!response.ok) {
+      throw new Error('Failed to list files');
+    }
+    return response.json();
+  },
+
+  /**
+   * Delete a file from a conversation.
+   */
+  async deleteFile(conversationId, fileId) {
+    const response = await fetch(
+      `${API_BASE}/api/conversations/${conversationId}/files/${fileId}`,
+      { method: 'DELETE' }
+    );
+    if (!response.ok) {
+      throw new Error('Failed to delete file');
+    }
+    return response.json();
+  },
+
+  /**
+   * Fetch available tools.
+   */
+  async getTools() {
+    const response = await fetch(`${API_BASE}/api/tools`);
+    if (!response.ok) {
+      throw new Error('Failed to fetch tools');
+    }
+    return response.json();
+  },
+
+  /**
+   * Fetch available connectors.
+   */
+  async getConnectors() {
+    const response = await fetch(`${API_BASE}/api/connectors`);
+    if (!response.ok) {
+      throw new Error('Failed to fetch connectors');
+    }
+    return response.json();
+  },
+
+  /**
    * Send a message in a conversation.
    */
-  async sendMessage(conversationId, content) {
+  async sendMessage(conversationId, content, councilModels, chairmanModel, systemPrompt) {
     const response = await fetch(
       `${API_BASE}/api/conversations/${conversationId}/message`,
       {
@@ -57,7 +163,12 @@ export const api = {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ content }),
+        body: JSON.stringify({
+          content,
+          council_models: councilModels,
+          chairman_model: chairmanModel,
+          system_prompt: systemPrompt || null,
+        }),
       }
     );
     if (!response.ok) {
@@ -70,10 +181,13 @@ export const api = {
    * Send a message and receive streaming updates.
    * @param {string} conversationId - The conversation ID
    * @param {string} content - The message content
+   * @param {string[]} councilModels - Selected council model IDs
+   * @param {string} chairmanModel - Selected chairman model ID
+   * @param {string|null} systemPrompt - Optional system prompt
    * @param {function} onEvent - Callback function for each event: (eventType, data) => void
    * @returns {Promise<void>}
    */
-  async sendMessageStream(conversationId, content, onEvent) {
+  async sendMessageStream(conversationId, content, councilModels, chairmanModel, systemPrompt, onEvent, previousIteration = null, provideContextToCouncil = false, enabledTools = null, enabledConnectors = null) {
     const response = await fetch(
       `${API_BASE}/api/conversations/${conversationId}/message/stream`,
       {
@@ -81,7 +195,16 @@ export const api = {
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ content }),
+        body: JSON.stringify({
+          content,
+          council_models: councilModels,
+          chairman_model: chairmanModel,
+          system_prompt: systemPrompt || null,
+          previous_iteration: previousIteration,
+          provide_context_to_council: provideContextToCouncil,
+          enabled_tools: enabledTools,
+          enabled_connectors: enabledConnectors,
+        }),
       }
     );
 

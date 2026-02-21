@@ -1,0 +1,42 @@
+.prompting-tips {
+  margin-top: 8px;
+}
+
+.tips-toggle {
+  background: none;
+  border: none;
+  color: #666;
+  font-size: 13px;
+  cursor: pointer;
+  padding: 4px 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tips-toggle:hover {
+  color: #4a90e2;
+}
+
+.tips-arrow {
+  font-size: 10px;
+}
+
+.tips-list {
+  margin: 8px 0 0 0;
+  padding: 12px 12px 12px 28px;
+  background: #f9fafb;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  font-size: 13px;
+  color: #555;
+  line-height: 1.6;
+}
+
+.tips-list li {
+  margin: 4px 0;
+}
+
+.tips-list strong {
+  color: #333;
+}

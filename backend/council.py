@@ -1,40 +1,82 @@
 """3-stage LLM Council orchestration."""
 
-from typing import List, Dict, Any, Tuple
-from .openrouter import query_models_parallel, query_model
-from .config import COUNCIL_MODELS, CHAIRMAN_MODEL
+from typing import List, Dict, Any, Tuple, Optional
+from .providers import query_models_parallel, query_model
+from .config import MODEL_PRICING
 
 
-async def stage1_collect_responses(user_query: str) -> List[Dict[str, Any]]:
+def calculate_cost(model: str, usage: dict) -> float:
+    """Calculate cost in USD for a model query based on token usage."""
+    if not usage:
+        return 0.0
+    pricing = MODEL_PRICING.get(model)
+    if not pricing:
+        return 0.0
+    input_price, output_price = pricing
+    input_cost = (usage.get("input_tokens", 0) / 1_000_000) * input_price
+    output_cost = (usage.get("output_tokens", 0) / 1_000_000) * output_price
+    return input_cost + output_cost
+
+
+async def stage1_collect_responses(
+    user_query: str,
+    council_models: List[str],
+    system_prompt: Optional[str] = None,
+    file_context: Optional[str] = None,
+    image_attachments: Optional[List[Dict[str, str]]] = None,
+    tools: Optional[List[Any]] = None,
+) -> List[Dict[str, Any]]:
     """
     Stage 1: Collect individual responses from all council models.
 
     Args:
         user_query: The user's question
+        council_models: List of model identifiers to query
+        system_prompt: Optional system prompt for the models
+        file_context: Optional text context from uploaded files
+        image_attachments: Optional list of {mime_type, base64_data} for vision
+        tools: Optional list of ToolDefinition objects for tool-use
 
     Returns:
-        List of dicts with 'model' and 'response' keys
+        List of dicts with 'model', 'response', and optional 'tool_calls' keys
     """
-    messages = [{"role": "user", "content": user_query}]
+    # Build the user message content, prepending file context if present
+    content = user_query
+    if file_context:
+        content = f"[ATTACHED FILES]\n{file_context}\n[END ATTACHED FILES]\n\n{user_query}"
+
+    user_msg: Dict[str, Any] = {"role": "user", "content": content}
+    if image_attachments:
+        user_msg["images"] = image_attachments
+
+    messages = [user_msg]
 
     # Query all models in parallel
-    responses = await query_models_parallel(COUNCIL_MODELS, messages)
+    responses = await query_models_parallel(council_models, messages, system_prompt, tools=tools)
 
     # Format results
     stage1_results = []
     for model, response in responses.items():
         if response is not None:  # Only include successful responses
-            stage1_results.append({
+            usage = response.get('usage', {})
+            cost = calculate_cost(model, usage)
+            result = {
                 "model": model,
-                "response": response.get('content', '')
-            })
+                "response": response.get('content', ''),
+                "usage": usage,
+                "cost": cost,
+            }
+            if response.get('tool_calls'):
+                result["tool_calls"] = response['tool_calls']
+            stage1_results.append(result)
 
     return stage1_results
 
 
 async def stage2_collect_rankings(
     user_query: str,
-    stage1_results: List[Dict[str, Any]]
+    stage1_results: List[Dict[str, Any]],
+    council_models: List[str],
 ) -> Tuple[List[Dict[str, Any]], Dict[str, str]]:
     """
     Stage 2: Each model ranks the anonymized responses.
@@ -42,6 +84,7 @@ async def stage2_collect_rankings(
     Args:
         user_query: The original user query
         stage1_results: Results from Stage 1
+        council_models: List of model identifiers to use for ranking
 
     Returns:
         Tuple of (rankings list, label_to_model mapping)
@@ -94,8 +137,8 @@ Now provide your evaluation and ranking:"""
 
     messages = [{"role": "user", "content": ranking_prompt}]
 
-    # Get rankings from all council models in parallel
-    responses = await query_models_parallel(COUNCIL_MODELS, messages)
+    # Get rankings from all council models in parallel (no system prompt for stage 2)
+    responses = await query_models_parallel(council_models, messages)
 
     # Format results
     stage2_results = []
@@ -103,10 +146,14 @@ Now provide your evaluation and ranking:"""
         if response is not None:
             full_text = response.get('content', '')
             parsed = parse_ranking_from_text(full_text)
+            usage = response.get('usage', {})
+            cost = calculate_cost(model, usage)
             stage2_results.append({
                 "model": model,
                 "ranking": full_text,
-                "parsed_ranking": parsed
+                "parsed_ranking": parsed,
+                "usage": usage,
+                "cost": cost,
             })
 
     return stage2_results, label_to_model
@@ -115,7 +162,9 @@ Now provide your evaluation and ranking:"""
 async def stage3_synthesize_final(
     user_query: str,
     stage1_results: List[Dict[str, Any]],
-    stage2_results: List[Dict[str, Any]]
+    stage2_results: List[Dict[str, Any]],
+    chairman_model: str,
+    previous_iteration: Optional[Dict[str, Any]] = None,
 ) -> Dict[str, Any]:
     """
     Stage 3: Chairman synthesizes final response.
@@ -124,6 +173,8 @@ async def stage3_synthesize_final(
         user_query: The original user query
         stage1_results: Individual model responses from Stage 1
         stage2_results: Rankings from Stage 2
+        chairman_model: Model identifier for the chairman
+        previous_iteration: Optional dict with previous run context for re-analysis
 
     Returns:
         Dict with 'model' and 'response' keys
@@ -147,7 +198,21 @@ STAGE 1 - Individual Responses:
 {stage1_text}
 
 STAGE 2 - Peer Rankings:
-{stage2_text}
+{stage2_text}"""
+
+    if previous_iteration:
+        chairman_prompt += f"""
+
+PREVIOUS ITERATION CONTEXT:
+This is a re-analysis. In the previous iteration:
+- Previous Query: {previous_iteration.get('query', 'N/A')}
+- Previous System Prompt: {previous_iteration.get('system_prompt', 'None')}
+- Previous Synthesis: {previous_iteration.get('stage3_response', 'N/A')}
+- Critique of Previous Analysis: {previous_iteration.get('critique', 'N/A')}
+
+Consider how the current responses compare to the previous iteration. Note improvements or regressions."""
+
+    chairman_prompt += """
 
 Your task as Chairman is to synthesize all of this information into a single, comprehensive, accurate answer to the user's original question. Consider:
 - The individual responses and their insights
@@ -158,19 +223,25 @@ Provide a clear, well-reasoned final answer that represents the council's collec
 
     messages = [{"role": "user", "content": chairman_prompt}]
 
-    # Query the chairman model
-    response = await query_model(CHAIRMAN_MODEL, messages)
+    # Query the chairman model (no system prompt for stage 3)
+    response = await query_model(chairman_model, messages)
 
     if response is None:
         # Fallback if chairman fails
         return {
-            "model": CHAIRMAN_MODEL,
-            "response": "Error: Unable to generate final synthesis."
+            "model": chairman_model,
+            "response": "Error: Unable to generate final synthesis.",
+            "usage": {"input_tokens": 0, "output_tokens": 0},
+            "cost": 0.0,
         }
 
+    usage = response.get('usage', {})
+    cost = calculate_cost(chairman_model, usage)
     return {
-        "model": CHAIRMAN_MODEL,
-        "response": response.get('content', '')
+        "model": chairman_model,
+        "response": response.get('content', ''),
+        "usage": usage,
+        "cost": cost,
     }
 
 
@@ -193,10 +264,8 @@ def parse_ranking_from_text(ranking_text: str) -> List[str]:
         if len(parts) >= 2:
             ranking_section = parts[1]
             # Try to extract numbered list format (e.g., "1. Response A")
-            # This pattern looks for: number, period, optional space, "Response X"
             numbered_matches = re.findall(r'\d+\.\s*Response [A-Z]', ranking_section)
             if numbered_matches:
-                # Extract just the "Response X" part
                 return [re.search(r'Response [A-Z]', m).group() for m in numbered_matches]
 
             # Fallback: Extract all "Response X" patterns in order
@@ -255,12 +324,166 @@ def calculate_aggregate_rankings(
     return aggregate
 
 
-async def generate_conversation_title(user_query: str) -> str:
+def parse_stage4_response(text: str) -> Dict[str, str]:
+    """
+    Parse the Stage 4 self-reflection response into structured sections.
+
+    Args:
+        text: Raw response text from the chairman
+
+    Returns:
+        Dict with 'critique', 'comparison', 'suggested_system_prompt', 'suggested_query'
+    """
+    result = {
+        "critique": "",
+        "comparison": "",
+        "suggested_system_prompt": "",
+        "suggested_query": "",
+    }
+
+    # Define section headers to look for
+    sections = [
+        ("CRITIQUE:", "critique"),
+        ("COMPARISON:", "comparison"),
+        ("SUGGESTED_SYSTEM_PROMPT:", "suggested_system_prompt"),
+        ("SUGGESTED_QUERY:", "suggested_query"),
+    ]
+
+    # Find all section positions
+    positions = []
+    for header, key in sections:
+        idx = text.find(header)
+        if idx != -1:
+            positions.append((idx, header, key))
+
+    if not positions:
+        # Fallback: entire response goes into critique
+        result["critique"] = text.strip()
+        return result
+
+    # Sort by position
+    positions.sort(key=lambda x: x[0])
+
+    # Extract each section's content
+    for i, (pos, header, key) in enumerate(positions):
+        start = pos + len(header)
+        if i + 1 < len(positions):
+            end = positions[i + 1][0]
+        else:
+            end = len(text)
+        result[key] = text[start:end].strip()
+
+    return result
+
+
+async def stage4_self_reflection(
+    user_query: str,
+    system_prompt: Optional[str],
+    stage1_results: List[Dict[str, Any]],
+    stage3_result: Dict[str, Any],
+    chairman_model: str,
+    previous_iteration: Optional[Dict[str, Any]] = None,
+) -> Dict[str, Any]:
+    """
+    Stage 4: Chairman self-reflects on the analysis and suggests improvements.
+
+    Args:
+        user_query: The original user query
+        system_prompt: The system prompt used (if any)
+        stage1_results: Individual model responses from Stage 1
+        stage3_result: The final synthesis from Stage 3
+        chairman_model: Model identifier for the chairman
+        previous_iteration: Optional dict with previous run context
+
+    Returns:
+        Dict with model, critique, comparison, suggested_system_prompt, suggested_query, raw_response
+    """
+    is_rerun = previous_iteration is not None
+
+    stage1_summary = "\n".join([
+        f"- {r['model']}: {r['response'][:200]}..."
+        for r in stage1_results
+    ])
+
+    reflection_prompt = f"""You are the Chairman of an LLM Council. You just completed a full analysis. Now reflect on how it could be improved.
+
+Original Query: {user_query}
+System Prompt Used: {system_prompt or 'None'}
+
+Stage 1 Responses (summarized):
+{stage1_summary}
+
+Stage 3 Final Synthesis:
+{stage3_result.get('response', '')}"""
+
+    if is_rerun:
+        reflection_prompt += f"""
+
+PREVIOUS ITERATION:
+- Previous Query: {previous_iteration.get('query', 'N/A')}
+- Previous System Prompt: {previous_iteration.get('system_prompt', 'None')}
+- Previous Synthesis: {previous_iteration.get('stage3_response', 'N/A')}"""
+
+    reflection_prompt += """
+
+Provide your self-reflection using EXACTLY these section headers:
+
+CRITIQUE:
+What were the weaknesses or gaps in this analysis? What could the council have done better? Be specific and actionable.
+"""
+
+    if is_rerun:
+        reflection_prompt += """
+COMPARISON:
+How does this iteration compare to the previous one? What improved? What regressed or remained unaddressed?
+"""
+
+    reflection_prompt += """
+SUGGESTED_SYSTEM_PROMPT:
+Write an improved system prompt that would help the council models produce better responses. If the current system prompt was good, refine it. If none was used, suggest one. Output ONLY the system prompt text.
+
+SUGGESTED_QUERY:
+Write an improved version of the user's query that would elicit better responses. Make it more specific, clearer, or better structured. Output ONLY the query text."""
+
+    messages = [{"role": "user", "content": reflection_prompt}]
+    response = await query_model(chairman_model, messages)
+
+    if response is None:
+        return {
+            "model": chairman_model,
+            "critique": "Error: Unable to generate self-reflection.",
+            "comparison": "",
+            "suggested_system_prompt": system_prompt or "",
+            "suggested_query": user_query,
+            "raw_response": "",
+            "usage": {"input_tokens": 0, "output_tokens": 0},
+            "cost": 0.0,
+        }
+
+    raw_text = response.get('content', '')
+    parsed = parse_stage4_response(raw_text)
+    usage = response.get('usage', {})
+    cost = calculate_cost(chairman_model, usage)
+
+    return {
+        "model": chairman_model,
+        "critique": parsed["critique"],
+        "comparison": parsed["comparison"],
+        "suggested_system_prompt": parsed["suggested_system_prompt"],
+        "suggested_query": parsed["suggested_query"],
+        "raw_response": raw_text,
+        "usage": usage,
+        "cost": cost,
+    }
+
+
+async def generate_conversation_title(user_query: str, model: str = "gemini-2.0-flash") -> str:
     """
     Generate a short title for a conversation based on the first user message.
 
     Args:
         user_query: The first user message
+        model: Model to use for title generation
 
     Returns:
         A short title (3-5 words)
@@ -274,8 +497,7 @@ Title:"""
 
     messages = [{"role": "user", "content": title_prompt}]
 
-    # Use gemini-2.5-flash for title generation (fast and cheap)
-    response = await query_model("google/gemini-2.5-flash", messages, timeout=30.0)
+    response = await query_model(model, messages, timeout=30.0)
 
     if response is None:
         # Fallback to a generic title
@@ -293,18 +515,26 @@ Title:"""
     return title
 
 
-async def run_full_council(user_query: str) -> Tuple[List, List, Dict, Dict]:
+async def run_full_council(
+    user_query: str,
+    council_models: List[str],
+    chairman_model: str,
+    system_prompt: Optional[str] = None,
+) -> Tuple[List, List, Dict, Dict]:
     """
     Run the complete 3-stage council process.
 
     Args:
         user_query: The user's question
+        council_models: List of model identifiers for the council
+        chairman_model: Model identifier for the chairman
+        system_prompt: Optional system prompt (used in Stage 1 only)
 
     Returns:
         Tuple of (stage1_results, stage2_results, stage3_result, metadata)
     """
     # Stage 1: Collect individual responses
-    stage1_results = await stage1_collect_responses(user_query)
+    stage1_results = await stage1_collect_responses(user_query, council_models, system_prompt)
 
     # If no models responded successfully, return error
     if not stage1_results:
@@ -314,7 +544,7 @@ async def run_full_council(user_query: str) -> Tuple[List, List, Dict, Dict]:
         }, {}
 
     # Stage 2: Collect rankings
-    stage2_results, label_to_model = await stage2_collect_rankings(user_query, stage1_results)
+    stage2_results, label_to_model = await stage2_collect_rankings(user_query, stage1_results, council_models)
 
     # Calculate aggregate rankings
     aggregate_rankings = calculate_aggregate_rankings(stage2_results, label_to_model)
@@ -323,7 +553,8 @@ async def run_full_council(user_query: str) -> Tuple[List, List, Dict, Dict]:
     stage3_result = await stage3_synthesize_final(
         user_query,
         stage1_results,
-        stage2_results
+        stage2_results,
+        chairman_model,
     )
 
     # Prepare metadata

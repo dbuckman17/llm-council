@@ -1,0 +1,94 @@
+.template-selector {
+  margin-bottom: 12px;
+}
+
+.template-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 6px;
+}
+
+.template-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.template-dropdown {
+  padding: 8px 10px;
+  border: 1px solid #d0d0d0;
+  border-radius: 6px;
+  font-size: 13px;
+  color: #333;
+  background: #ffffff;
+  cursor: pointer;
+  outline: none;
+  min-width: 200px;
+}
+
+.template-dropdown:focus {
+  border-color: #4a90e2;
+  box-shadow: 0 0 0 2px rgba(74, 144, 226, 0.1);
+}
+
+.template-dropdown:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.template-description {
+  font-size: 12px;
+  color: #888;
+  font-style: italic;
+}
+
+.template-fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 8px;
+  padding: 10px;
+  background: #f8f9fa;
+  border-radius: 6px;
+  border: 1px solid #e8e8e8;
+}
+
+.template-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 180px;
+}
+
+.field-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #555;
+}
+
+.field-select,
+.field-input {
+  padding: 6px 8px;
+  border: 1px solid #d0d0d0;
+  border-radius: 4px;
+  font-size: 13px;
+  color: #333;
+  background: #ffffff;
+  outline: none;
+}
+
+.field-select:focus,
+.field-input:focus {
+  border-color: #4a90e2;
+  box-shadow: 0 0 0 2px rgba(74, 144, 226, 0.1);
+}
+
+.field-select:disabled,
+.field-input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

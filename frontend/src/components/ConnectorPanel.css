@@ -1,0 +1,115 @@
+.connector-panel {
+  margin-bottom: 12px;
+}
+
+.connector-panel-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 6px;
+}
+
+.connector-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.connector-item {
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  background: #ffffff;
+  overflow: hidden;
+}
+
+.connector-item.active {
+  border-color: #4a90e2;
+}
+
+.connector-toggle {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  cursor: pointer;
+}
+
+.connector-toggle input[type="checkbox"] {
+  accent-color: #4a90e2;
+  cursor: pointer;
+  margin-top: 2px;
+}
+
+.connector-toggle input[type="checkbox"]:disabled {
+  cursor: not-allowed;
+}
+
+.connector-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.connector-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #333;
+  font-family: monospace;
+}
+
+.connector-description {
+  font-size: 11px;
+  color: #888;
+  line-height: 1.3;
+}
+
+.connector-config {
+  padding: 10px 12px;
+  border-top: 1px solid #e8e8e8;
+  background: #f8f9fa;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+.connector-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  flex: 1;
+  min-width: 180px;
+}
+
+.connector-field-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: #555;
+}
+
+.connector-field-label .required {
+  color: #e74c3c;
+  margin-left: 2px;
+}
+
+.connector-field-input {
+  padding: 6px 8px;
+  border: 1px solid #d0d0d0;
+  border-radius: 4px;
+  font-size: 13px;
+  color: #333;
+  background: #ffffff;
+  outline: none;
+}
+
+.connector-field-input:focus {
+  border-color: #4a90e2;
+  box-shadow: 0 0 0 2px rgba(74, 144, 226, 0.1);
+}
+
+.connector-field-input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}

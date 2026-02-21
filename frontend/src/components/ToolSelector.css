@@ -1,0 +1,61 @@
+.tool-selector {
+  margin-bottom: 12px;
+}
+
+.tool-selector-label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin-bottom: 6px;
+}
+
+.tool-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.tool-checkbox {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 8px 10px;
+  background: #ffffff;
+  border: 1px solid #e0e0e0;
+  border-radius: 6px;
+  cursor: pointer;
+  min-width: 200px;
+  flex: 1;
+}
+
+.tool-checkbox input[type="checkbox"] {
+  accent-color: #4a90e2;
+  cursor: pointer;
+  margin-top: 2px;
+}
+
+.tool-checkbox input[type="checkbox"]:disabled {
+  cursor: not-allowed;
+}
+
+.tool-info {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.tool-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #333;
+  font-family: monospace;
+}
+
+.tool-description {
+  font-size: 11px;
+  color: #888;
+  line-height: 1.3;
+}
