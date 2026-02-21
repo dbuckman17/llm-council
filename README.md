@@ -87,6 +87,18 @@ Real-time cost estimation for every query:
 - Total workflow cost
 - Based on token usage extracted from each provider's response and configurable pricing table
 
+### Reasoning Effort / Extended Thinking
+
+A segmented control lets you set the reasoning effort level for Stage 1 queries:
+
+- **Off** — Standard responses (default)
+- **Low / Medium / High** — Enables provider-native extended thinking:
+  - **Anthropic**: Extended thinking with configurable budget tokens
+  - **OpenAI**: `reasoning_effort` parameter for o3, o4-mini, and GPT-5.x models
+  - **Google**: `ThinkingConfig` with thinking budget for Gemini 2.5+ and 3.x models
+
+Higher reasoning effort produces more thorough answers at the cost of increased latency and token usage.
+
 ### Prompt Optimization
 
 Click "Optimize Prompt" before sending to have a selected model rewrite your query for clarity, specificity, and structure. Choose which model performs the optimization.

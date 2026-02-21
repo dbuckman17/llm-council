@@ -246,3 +246,64 @@
   background: #ccc;
   border-color: #ccc;
 }
+
+/* Reasoning effort selector */
+.reasoning-effort-selector {
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.reasoning-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #666;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.reasoning-options {
+  display: flex;
+  gap: 0;
+  border: 1px solid #d0d0d0;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.reasoning-option {
+  padding: 5px 14px;
+  border: none;
+  background: #ffffff;
+  color: #666;
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s;
+  border-right: 1px solid #d0d0d0;
+}
+
+.reasoning-option:last-child {
+  border-right: none;
+}
+
+.reasoning-option:hover:not(:disabled) {
+  background: #f0f7ff;
+  color: #4a90e2;
+}
+
+.reasoning-option.active {
+  background: #4a90e2;
+  color: #fff;
+}
+
+.reasoning-option:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.reasoning-hint {
+  font-size: 11px;
+  color: #999;
+  font-style: italic;
+}

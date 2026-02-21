@@ -62,6 +62,7 @@ class SendMessageRequest(BaseModel):
     provide_context_to_council: bool = False
     enabled_tools: Optional[List[str]] = None
     enabled_connectors: Optional[List[Dict[str, Any]]] = None
+    reasoning_effort: Optional[str] = None  # "off", "low", "medium", "high"
 
 
 class OptimizePromptRequest(BaseModel):
@@ -331,6 +332,7 @@ async def send_message_stream(conversation_id: str, request: SendMessageRequest)
                 file_context=file_context or None,
                 image_attachments=image_attachments or None,
                 tools=tool_defs,
+                reasoning_effort=request.reasoning_effort,
             )
             yield f"data: {json.dumps({'type': 'stage1_complete', 'data': stage1_results})}\n\n"
 

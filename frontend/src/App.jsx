@@ -30,6 +30,9 @@ function App() {
   const [availableConnectors, setAvailableConnectors] = useState([]);
   const [enabledConnectors, setEnabledConnectors] = useState([]);
 
+  // Reasoning effort state
+  const [reasoningEffort, setReasoningEffort] = useState('off');
+
   // Load conversations and models on mount
   useEffect(() => {
     loadConversations();
@@ -297,6 +300,7 @@ function App() {
         false,
         enabledTools.length > 0 ? enabledTools : null,
         enabledConnectors.length > 0 ? enabledConnectors : null,
+        reasoningEffort !== 'off' ? reasoningEffort : null,
       );
     } catch (error) {
       console.error('Failed to send message:', error);
@@ -458,6 +462,7 @@ function App() {
         provideContext,
         enabledTools.length > 0 ? enabledTools : null,
         enabledConnectors.length > 0 ? enabledConnectors : null,
+        reasoningEffort !== 'off' ? reasoningEffort : null,
       );
     } catch (error) {
       console.error('Failed to re-run analysis:', error);
@@ -499,6 +504,8 @@ function App() {
         availableConnectors={availableConnectors}
         enabledConnectors={enabledConnectors}
         onEnabledConnectorsChange={setEnabledConnectors}
+        reasoningEffort={reasoningEffort}
+        onReasoningEffortChange={setReasoningEffort}
       />
     </div>
   );

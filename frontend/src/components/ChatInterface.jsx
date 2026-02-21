@@ -36,6 +36,8 @@ export default function ChatInterface({
   availableConnectors,
   enabledConnectors,
   onEnabledConnectorsChange,
+  reasoningEffort,
+  onReasoningEffortChange,
 }) {
   const [input, setInput] = useState('');
   const [isOptimizing, setIsOptimizing] = useState(false);
@@ -202,6 +204,27 @@ export default function ChatInterface({
             onChairmanModelChange={onChairmanModelChange}
             disabled={isLoading}
           />
+
+          <div className="reasoning-effort-selector">
+            <label className="reasoning-label">Reasoning Effort</label>
+            <div className="reasoning-options">
+              {['off', 'low', 'medium', 'high'].map((level) => (
+                <button
+                  key={level}
+                  className={`reasoning-option ${reasoningEffort === level ? 'active' : ''}`}
+                  onClick={() => onReasoningEffortChange(level)}
+                  disabled={isLoading}
+                >
+                  {level.charAt(0).toUpperCase() + level.slice(1)}
+                </button>
+              ))}
+            </div>
+            <span className="reasoning-hint">
+              {reasoningEffort === 'off'
+                ? 'Standard responses'
+                : `Extended thinking enabled (${reasoningEffort})`}
+            </span>
+          </div>
 
           <TemplateSelector
             templates={templates}

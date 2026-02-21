@@ -187,7 +187,7 @@ export const api = {
    * @param {function} onEvent - Callback function for each event: (eventType, data) => void
    * @returns {Promise<void>}
    */
-  async sendMessageStream(conversationId, content, councilModels, chairmanModel, systemPrompt, onEvent, previousIteration = null, provideContextToCouncil = false, enabledTools = null, enabledConnectors = null) {
+  async sendMessageStream(conversationId, content, councilModels, chairmanModel, systemPrompt, onEvent, previousIteration = null, provideContextToCouncil = false, enabledTools = null, enabledConnectors = null, reasoningEffort = null) {
     const response = await fetch(
       `${API_BASE}/api/conversations/${conversationId}/message/stream`,
       {
@@ -204,6 +204,7 @@ export const api = {
           provide_context_to_council: provideContextToCouncil,
           enabled_tools: enabledTools,
           enabled_connectors: enabledConnectors,
+          reasoning_effort: reasoningEffort,
         }),
       }
     );

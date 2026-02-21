@@ -25,6 +25,7 @@ async def stage1_collect_responses(
     file_context: Optional[str] = None,
     image_attachments: Optional[List[Dict[str, str]]] = None,
     tools: Optional[List[Any]] = None,
+    reasoning_effort: Optional[str] = None,
 ) -> List[Dict[str, Any]]:
     """
     Stage 1: Collect individual responses from all council models.
@@ -36,6 +37,7 @@ async def stage1_collect_responses(
         file_context: Optional text context from uploaded files
         image_attachments: Optional list of {mime_type, base64_data} for vision
         tools: Optional list of ToolDefinition objects for tool-use
+        reasoning_effort: Optional reasoning effort level ("off", "low", "medium", "high")
 
     Returns:
         List of dicts with 'model', 'response', and optional 'tool_calls' keys
@@ -52,7 +54,7 @@ async def stage1_collect_responses(
     messages = [user_msg]
 
     # Query all models in parallel
-    responses = await query_models_parallel(council_models, messages, system_prompt, tools=tools)
+    responses = await query_models_parallel(council_models, messages, system_prompt, tools=tools, reasoning_effort=reasoning_effort)
 
     # Format results
     stage1_results = []

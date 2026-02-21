@@ -114,6 +114,7 @@ async def _query_openai(
     messages: List[Dict[str, Any]],
     system_prompt: Optional[str] = None,
     tools: Optional[List[Any]] = None,
+    reasoning_effort: Optional[str] = None,
 ) -> Optional[Dict[str, Any]]:
     """Query a model via OpenAI API with optional tool-use loop."""
     if not openai_client:
@@ -146,6 +147,13 @@ async def _query_openai(
             })
             tool_map[t.name] = t
 
+    # Map reasoning_effort for OpenAI reasoning models (o3, o4-mini, gpt-5.2*)
+    openai_reasoning = None
+    if reasoning_effort and reasoning_effort != "off":
+        is_reasoning_model = model.startswith("o3") or model.startswith("o4") or model.startswith("gpt-5")
+        if is_reasoning_model:
+            openai_reasoning = reasoning_effort  # OpenAI accepts "low", "medium", "high"
+
     try:
         all_tool_calls = []
 
@@ -153,6 +161,8 @@ async def _query_openai(
             kwargs = {"model": model, "messages": full_messages}
             if openai_tools:
                 kwargs["tools"] = openai_tools
+            if openai_reasoning:
+                kwargs["reasoning_effort"] = openai_reasoning
 
             response = await openai_client.chat.completions.create(**kwargs)
             choice = response.choices[0]
@@ -213,6 +223,7 @@ async def _query_anthropic(
     messages: List[Dict[str, Any]],
     system_prompt: Optional[str] = None,
     tools: Optional[List[Any]] = None,
+    reasoning_effort: Optional[str] = None,
 ) -> Optional[Dict[str, Any]]:
     """Query a model via Anthropic API with optional tool-use loop."""
     if not anthropic_client:
@@ -248,6 +259,15 @@ async def _query_anthropic(
         kwargs["system"] = system_prompt
     if anthropic_tools:
         kwargs["tools"] = anthropic_tools
+
+    # Anthropic extended thinking via adaptive budget
+    if reasoning_effort and reasoning_effort != "off":
+        # Map effort levels to Anthropic budget_tokens
+        effort_to_budget = {"low": 2048, "medium": 8192, "high": 32768}
+        budget = effort_to_budget.get(reasoning_effort, 8192)
+        kwargs["thinking"] = {"type": "enabled", "budget_tokens": budget}
+        # Extended thinking requires higher max_tokens
+        kwargs["max_tokens"] = max(kwargs["max_tokens"], budget + 8192)
 
     try:
         all_tool_calls = []
@@ -315,6 +335,7 @@ async def _query_google(
     messages: List[Dict[str, Any]],
     system_prompt: Optional[str] = None,
     tools: Optional[List[Any]] = None,
+    reasoning_effort: Optional[str] = None,
 ) -> Optional[Dict[str, Any]]:
     """Query a model via Google GenAI API with optional tool-use loop."""
     if not google_client:
@@ -331,6 +352,15 @@ async def _query_google(
     config = {}
     if system_prompt:
         config["system_instruction"] = system_prompt
+
+    # Google thinking config for Gemini 2.5+ and 3.x models
+    if reasoning_effort and reasoning_effort != "off":
+        is_thinking_model = "2.5" in model or "3" in model
+        if is_thinking_model:
+            effort_to_budget = {"low": 2048, "medium": 8192, "high": 32768}
+            budget = effort_to_budget.get(reasoning_effort, 8192)
+            from google.genai.types import ThinkingConfig
+            config["thinking_config"] = ThinkingConfig(thinking_budget=budget)
 
     # Build tool definitions for Google
     google_tools = None
@@ -436,6 +466,7 @@ async def query_model(
     system_prompt: Optional[str] = None,
     timeout: float = 120.0,
     tools: Optional[List[Any]] = None,
+    reasoning_effort: Optional[str] = None,
 ) -> Optional[Dict[str, Any]]:
     """
     Query a single model via its provider's API.
@@ -446,6 +477,7 @@ async def query_model(
         system_prompt: Optional system prompt
         timeout: Request timeout in seconds
         tools: Optional list of ToolDefinition objects for tool-use
+        reasoning_effort: Optional reasoning effort level ("off", "low", "medium", "high")
 
     Returns:
         Response dict with 'content', optional 'reasoning_details' and 'tool_calls', or None if failed
@@ -453,11 +485,11 @@ async def query_model(
     provider = get_provider(model)
 
     if provider == "anthropic":
-        query_fn = _query_anthropic(model, messages, system_prompt, tools)
+        query_fn = _query_anthropic(model, messages, system_prompt, tools, reasoning_effort)
     elif provider == "google":
-        query_fn = _query_google(model, messages, system_prompt, tools)
+        query_fn = _query_google(model, messages, system_prompt, tools, reasoning_effort)
     else:
-        query_fn = _query_openai(model, messages, system_prompt, tools)
+        query_fn = _query_openai(model, messages, system_prompt, tools, reasoning_effort)
 
     try:
         return await asyncio.wait_for(query_fn, timeout=timeout)
@@ -471,6 +503,7 @@ async def query_models_parallel(
     messages: List[Dict[str, Any]],
     system_prompt: Optional[str] = None,
     tools: Optional[List[Any]] = None,
+    reasoning_effort: Optional[str] = None,
 ) -> Dict[str, Optional[Dict[str, Any]]]:
     """
     Query multiple models in parallel.
@@ -480,10 +513,11 @@ async def query_models_parallel(
         messages: List of message dicts to send to each model
         system_prompt: Optional system prompt
         tools: Optional list of ToolDefinition objects for tool-use
+        reasoning_effort: Optional reasoning effort level ("off", "low", "medium", "high")
 
     Returns:
         Dict mapping model identifier to response dict (or None if failed)
     """
-    tasks = [query_model(model, messages, system_prompt, tools=tools) for model in models]
+    tasks = [query_model(model, messages, system_prompt, tools=tools, reasoning_effort=reasoning_effort) for model in models]
     responses = await asyncio.gather(*tasks)
     return {model: response for model, response in zip(models, responses)}
